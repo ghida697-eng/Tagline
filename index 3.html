@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShotSense 🏀 Take smarter shots</title>
+<style>
+:root{--bg:#fff7ed;--fg:#1c1917;--card:#ffffff;--ac:#ff5a1f;--ac2:#7c3aed;--gold:#fbbf24;--mut:#78716c;--bd:#fed7aa}
+@media(prefers-color-scheme:dark){:root{--bg:#0f0a1e;--fg:#f5f3ff;--card:#1c1433;--mut:#c4b5fd;--bd:#4c1d95}}
+body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--fg);max-width:900px;margin:auto;padding:16px}
+header{background:linear-gradient(135deg,#ff5a1f,#ff2d6f 55%,#7c3aed);color:#fff;border-radius:16px;padding:20px;text-align:center;box-shadow:0 6px 20px rgba(255,90,31,.35)}
+header h1{margin:0;font-size:2.2em;letter-spacing:1px}
+header .tag{font-size:1.15em;margin:6px 0 0;opacity:.95;font-weight:600}
+.card{background:var(--card);border:2px solid var(--bd);border-radius:14px;padding:14px;margin:12px 0}
+button,input,select{font:inherit;padding:9px 14px;border-radius:10px;border:2px solid var(--bd);background:var(--card);color:var(--fg)}
+button{background:linear-gradient(135deg,#ff5a1f,#ff2d6f);color:#fff;border:0;cursor:pointer;font-weight:700;box-shadow:0 3px 10px rgba(255,45,111,.35)}
+button:active{transform:scale(.97)}
+table{width:100%;border-collapse:collapse}td,th{padding:7px;text-align:center;border-bottom:1px solid var(--bd)}
+th{background:linear-gradient(135deg,#7c3aed,#ff2d6f);color:#fff}
+canvas{max-width:100%;background:linear-gradient(#e9a35c,#c97b34);border-radius:10px;border:3px solid var(--gold)}
+.big{font-size:1.6em;color:#16a34a;font-weight:800}
+.mut{color:var(--mut);font-size:.9em}
+b{color:var(--ac)}
+</style>
+</head>
+<body>
+<header><h1>🏀 ShotSense</h1><p class="tag">سدّد من المكان الصح 🔥 Take smarter shots</p></header>
+<p>هل الفريق أو اللاعب يسدد من الأماكن الأكثر كفاءة؟ ارفع بيانات التسديدات واكتشف كم نقطة تضيع.</p>
+
+<div class="card">
+<input type="file" id="f" accept=".csv">
+<button onclick="demo()">جرّب بيانات تجريبية</button>
+<p class="mut">الأعمدة المطلوبة: <code>player,x,y,made</code> (x و y بإحداثيات NBA: الوحدة عُشر قدم والسلة عند 0,0، و made = 1 أو 0). يمكن تصدير هذه البيانات من nba_api أو Kaggle. البيانات التجريبية مولّدة عشوائيًا وليست حقيقية.</p>
+</div>
+
+<div id="out" style="display:none">
+<select id="p" onchange="render()"></select>
+<div class="card"><canvas id="c" width="500" height="470"></canvas></div>
+<div class="card"><table id="t"></table></div>
+<div class="card" id="sim"></div>
+</div>
+
+<script>
+let rows=[];
+const Z=['قرب السلة','المنطقة المطلية','متوسطة المدى','ثلاثية الزاوية','ثلاثية خارج القوس'];
+function zone(x,y){
+  const d=Math.hypot(x,y)/10;
+  if(Math.abs(x)>=220&&y<=92.5)return 3;
+  if(d>=23.75)return 4;
+  if(d<4)return 0;
+  if(Math.abs(x)<=80&&y<=140)return 1;
+  return 2;
+}
+const pts=z=>z>=3?3:2;
+document.getElementById('f').onchange=e=>{
+  const r=new FileReader();
+  r.onload=()=>{
+    const L=r.result.trim().split(/\r?\n/),h=L[0].split(',').map(s=>s.trim().toLowerCase());
+    const i=k=>h.indexOf(k);
+    if(['x','y','made'].some(k=>i(k)<0)){alert('الملف لازم يحتوي الأعمدة x و y و made');return}
+    rows=L.slice(1).map(l=>{const c=l.split(',');return{p:i('player')>=0?c[i('player')]:'الكل',x:+c[i('x')],y:+c[i('y')],m:+c[i('made')]}}).filter(r=>!isNaN(r.x)&&!isNaN(r.y));
+    init();
+  };
+  r.readAsText(e.target.files[0]);
+};
+function demo(){
+  const names=['لاعب أ (يحب المتوسطة)','لاعب ب (متوازن)'];rows=[];
+  const mix=[[.12,.1,.5,.08,.2],[.25,.15,.15,.12,.33]],pct=[.62,.45,.40,.38,.35];
+  names.forEach((n,k)=>{for(let i=0;i<400;i++){
+    let r=Math.random(),z=0,a=0;for(;z<5;z++){a+=mix[k][z];if(r<a)break}z=Math.min(z,4);
+    let x,y;
+    if(z==0){const t=Math.random()*6.28,d=Math.random()*35;x=Math.cos(t)*d;y=Math.abs(Math.sin(t))*d}
+    else if(z==1){x=(Math.random()-.5)*150;y=40+Math.random()*100}
+    else if(z==2){const t=Math.random()*3.14,d=100+Math.random()*120;x=Math.cos(t)*d;y=Math.sin(t)*d;if(Math.hypot(x,y)<40||zone(x,y)!=2){x=150;y=100}}
+    else if(z==3){x=(Math.random()<.5?-1:1)*235;y=Math.random()*80}
+    else{const t=.3+Math.random()*2.5,d=240+Math.random()*30;x=Math.cos(t)*d;y=Math.sin(t)*d}
+    rows.push({p:n,x,y,m:Math.random()<pct[zone(x,y)]?1:0})}});
+  init();
+}
+function init(){
+  const ps=['الكل',...new Set(rows.map(r=>r.p))];
+  p.innerHTML=ps.map(n=>`<option>${n}</option>`).join('');
+  out.style.display='block';render();
+}
+function render(){
+  const sel=p.value,d=rows.filter(r=>sel=='الكل'||r.p==sel);
+  const S=Z.map(()=>({a:0,m:0}));
+  d.forEach(r=>{const z=zone(r.x,r.y);S[z].a++;S[z].m+=r.m});
+  const pps=S.map((s,z)=>s.a?s.m*pts(z)/s.a:0);
+  t.innerHTML='<tr><th>المنطقة</th><th>محاولات</th><th>نسبة التسديد</th><th>نقاط/تسديدة</th></tr>'+
+    S.map((s,z)=>`<tr><td>${Z[z]}</td><td>${s.a} (${(s.a/d.length*100||0).toFixed(0)}%)</td><td>${s.a?(s.m/s.a*100).toFixed(1):'-'}%</td><td><b>${pps[z].toFixed(2)}</b></td></tr>`).join('');
+  // simulation: move 10% of all shots from mid-range to best other zone for this shooter
+  const mid=S[2].a,mv=Math.round(d.length*.10),mvAct=Math.min(mv,mid);
+  let best=-1,bp=0;[0,3,4].forEach(z=>{if(S[z].a>=10&&pps[z]>bp){bp=pps[z];best=z}});
+  const sim=document.getElementById('sim');
+  if(best<0||!mvAct||bp<=pps[2]){sim.innerHTML='<b>المحاكاة:</b> توزيع التسديدات هنا جيد أو لا توجد بيانات كافية للمقارنة.'}
+  else{const g=mvAct*(bp-pps[2]);
+    sim.innerHTML=`<b>المحاكاة:</b> لو تحوّل <b>${mvAct}</b> تسديدة متوسطة المدى إلى <b>${Z[best]}</b> (${bp.toFixed(2)} نقطة/تسديدة بدل ${pps[2].toFixed(2)})، يكسب <span class="big">+${g.toFixed(1)} نقطة</span> من أصل ${d.length} تسديدة (${(g/d.length*100).toFixed(1)} نقطة لكل 100 تسديدة).<p class="mut">ملاحظة: تفترض المحاكاة أن النسبة تبقى ثابتة، والواقع يتأثر بجودة الدفاع وفرص التسديد.</p>`}
+  draw(d);
+}
+function draw(d){
+  const g=c.getContext('2d'),W=500,H=470,sx=x=>W/2+x,sy=y=>H-(y+52)*1;
+  g.clearRect(0,0,W,H);g.strokeStyle='#fff';g.lineWidth=2;
+  g.strokeRect(sx(-80),sy(190),160,190+52-52+0);
+  g.beginPath();g.arc(sx(0),sy(0),237.5,Math.atan2(-92.5,-220)*1+0,0);g.arc(sx(0),sy(0),237.5,Math.PI,0,false);g.stroke();
+  g.beginPath();g.moveTo(sx(-220),sy(0));g.lineTo(sx(-220),sy(92.5));g.moveTo(sx(220),sy(0));g.lineTo(sx(220),sy(92.5));g.stroke();
+  g.beginPath();g.arc(sx(0),sy(0),7.5,0,6.28);g.stroke();
+  d.forEach(r=>{g.fillStyle=r.m?'rgba(16,185,129,.9)':'rgba(220,38,38,.75)';g.beginPath();g.arc(sx(r.x),sy(r.y),3.5,0,6.28);g.fill()});
+}
+</script>
+</body>
+</html>
