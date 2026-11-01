@@ -1,0 +1,2 @@
+# Tagline
+Take smarter shots
